@@ -15,7 +15,25 @@ function uuid() {
   return crypto.randomUUID();
 }
 
-function loadData() {
+const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL;
+const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
+const USE_UPSTASH = !!(UPSTASH_URL && UPSTASH_TOKEN);
+
+async function loadData() {
+  if (USE_UPSTASH) {
+    try {
+      const res = await fetch(UPSTASH_URL, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${UPSTASH_TOKEN}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(['GET', 'donkeyball'])
+      });
+      const json = await res.json();
+      if (json.result) return JSON.parse(json.result);
+    } catch (e) {
+      console.error('[data] Upstash load failed:', e.message);
+    }
+    return { players: [], teams: [], bracket: null };
+  }
   try {
     if (fs.existsSync(DATA_FILE)) {
       return JSON.parse(fs.readFileSync(DATA_FILE, 'utf8'));
@@ -26,7 +44,19 @@ function loadData() {
   return { players: [], teams: [], bracket: null };
 }
 
-function saveData(data) {
+async function saveData(data) {
+  if (USE_UPSTASH) {
+    try {
+      await fetch(UPSTASH_URL, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${UPSTASH_TOKEN}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify(['SET', 'donkeyball', JSON.stringify(data)])
+      });
+    } catch (e) {
+      console.error('[data] Upstash save failed:', e.message);
+    }
+    return;
+  }
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf8');
 }
 
@@ -1351,7 +1381,7 @@ async function router(req, res) {
 
   // ── HTML pages ──
   if (pathname === '/' || pathname === '/signup') {
-    const data = loadData();
+    const data = await loadData();
     return sendHTML(res, signupPage(data));
   }
   if (pathname === '/admin') {
@@ -1365,12 +1395,12 @@ async function router(req, res) {
 
   // GET /api/state
   if (method === 'GET' && pathname === '/api/state') {
-    return sendJSON(res, 200, loadData());
+    return sendJSON(res, 200, await loadData());
   }
 
   // GET /api/players
   if (method === 'GET' && pathname === '/api/players') {
-    const data = loadData();
+    const data = await loadData();
     return sendJSON(res, 200, data.players);
   }
 
@@ -1380,12 +1410,12 @@ async function router(req, res) {
     const name = (body.name || '').trim();
     if (!name) return sendJSON(res, 400, { error: 'Name is required' });
     if (name.length > 50) return sendJSON(res, 400, { error: 'Name too long' });
-    const data = loadData();
+    const data = await loadData();
     const dup = data.players.find(p => p.name.toLowerCase() === name.toLowerCase());
     if (dup) return sendJSON(res, 409, { error: 'That name is already registered!' });
     const player = { id: uuid(), name, createdAt: new Date().toISOString() };
     data.players.push(player);
-    saveData(data);
+    await saveData(data);
     console.log(`  -> Player signed up: ${name}`);
     return sendJSON(res, 201, { player, playerCount: data.players.length });
   }
@@ -1396,12 +1426,12 @@ async function router(req, res) {
     const name = (body.name || '').trim();
     if (!name) return sendJSON(res, 400, { error: 'Name is required' });
     if (name.length > 50) return sendJSON(res, 400, { error: 'Name too long' });
-    const data = loadData();
+    const data = await loadData();
     const dup = data.players.find(p => p.name.toLowerCase() === name.toLowerCase());
     if (dup) return sendJSON(res, 409, { error: 'Player already exists' });
     const player = { id: uuid(), name, createdAt: new Date().toISOString() };
     data.players.push(player);
-    saveData(data);
+    await saveData(data);
     console.log(`  -> Admin added player: ${name}`);
     return sendJSON(res, 201, { player });
   }
@@ -1410,20 +1440,20 @@ async function router(req, res) {
   const deletePlayerMatch = pathname.match(/^\/api\/players\/([^/]+)$/);
   if (method === 'DELETE' && deletePlayerMatch) {
     const id = deletePlayerMatch[1];
-    const data = loadData();
+    const data = await loadData();
     const idx = data.players.findIndex(p => p.id === id);
     if (idx === -1) return sendJSON(res, 404, { error: 'Player not found' });
     const [removed] = data.players.splice(idx, 1);
     // Also remove from teams
     data.teams.forEach(t => { t.players = t.players.filter(pid => pid !== id); });
-    saveData(data);
+    await saveData(data);
     console.log(`  -> Removed player: ${removed.name}`);
     return sendJSON(res, 200, { ok: true });
   }
 
   // POST /api/teams/generate
   if (method === 'POST' && pathname === '/api/teams/generate') {
-    const data = loadData();
+    const data = await loadData();
     if (data.players.length < 2) return sendJSON(res, 400, { error: 'Need at least 2 players' });
     const shuffled = shuffle([...data.players]);
     const teamSize = 2;
@@ -1442,7 +1472,7 @@ async function router(req, res) {
     }
     data.teams = teams;
     data.bracket = null; // reset bracket
-    saveData(data);
+    await saveData(data);
     console.log(`  -> Generated ${teams.length} teams`);
     return sendJSON(res, 200, { teams });
   }
@@ -1452,12 +1482,12 @@ async function router(req, res) {
   if (method === 'PUT' && putTeamMatch) {
     const id = putTeamMatch[1];
     const body = await parseBody(req);
-    const data = loadData();
+    const data = await loadData();
     const team = data.teams.find(t => t.id === id);
     if (!team) return sendJSON(res, 404, { error: 'Team not found' });
     if (body.name !== undefined) team.name = String(body.name).trim() || team.name;
     if (body.players !== undefined) team.players = body.players;
-    saveData(data);
+    await saveData(data);
     console.log(`  -> Updated team: ${team.name}`);
     return sendJSON(res, 200, { team });
   }
@@ -1467,24 +1497,24 @@ async function router(req, res) {
     const body = await parseBody(req);
     const { playerId, fromTeamId, toTeamId } = body;
     if (!playerId || !fromTeamId || !toTeamId) return sendJSON(res, 400, { error: 'Missing fields' });
-    const data = loadData();
+    const data = await loadData();
     const from = data.teams.find(t => t.id === fromTeamId);
     const to = data.teams.find(t => t.id === toTeamId);
     if (!from || !to) return sendJSON(res, 404, { error: 'Team not found' });
     from.players = from.players.filter(pid => pid !== playerId);
     if (!to.players.includes(playerId)) to.players.push(playerId);
-    saveData(data);
+    await saveData(data);
     console.log(`  -> Moved player ${playerId} from ${from.name} to ${to.name}`);
     return sendJSON(res, 200, { ok: true });
   }
 
   // POST /api/bracket/generate
   if (method === 'POST' && pathname === '/api/bracket/generate') {
-    const data = loadData();
+    const data = await loadData();
     if (data.teams.length < 2) return sendJSON(res, 400, { error: 'Need at least 2 teams' });
     const bracket = generateBracket(data.teams);
     data.bracket = bracket;
-    saveData(data);
+    await saveData(data);
     console.log(`  -> Generated bracket with ${data.teams.length} teams`);
     return sendJSON(res, 200, { bracket });
   }
@@ -1496,7 +1526,7 @@ async function router(req, res) {
     const body = await parseBody(req);
     const { winnerId } = body;
     if (!winnerId) return sendJSON(res, 400, { error: 'winnerId required' });
-    const data = loadData();
+    const data = await loadData();
     if (!data.bracket) return sendJSON(res, 404, { error: 'No bracket' });
 
     let found = false;
@@ -1520,7 +1550,7 @@ async function router(req, res) {
 
     // Propagate winners through bracket
     propagateBracket(data.bracket);
-    saveData(data);
+    await saveData(data);
     console.log(`  -> Match ${matchId} winner set: ${winnerId}`);
     return sendJSON(res, 200, { bracket: data.bracket });
   }
