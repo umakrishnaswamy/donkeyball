@@ -702,9 +702,11 @@ function renderTeams() {
     return;
   }
   c.innerHTML = '<div class="teams-grid">' + state.teams.map(team => {
-    const playerOptions = state.teams.map(t =>
-      t.id !== team.id ? \`<option value="\${t.id}">\${escHtml(t.name)}</option>\` : ''
-    ).join('');
+    const playerOptions = state.teams.map(t => {
+      if (t.id === team.id) return '';
+      const label = t.players.map(pid => { const p = state.players.find(pl => pl.id === pid); return p ? p.name : null; }).filter(Boolean).join(' & ') || 'Empty team';
+      return \`<option value="\${t.id}">\${escHtml(label)}</option>\`;
+    }).join('');
     const players = team.players.map(pid => {
       const p = state.players.find(pl => pl.id === pid);
       return p ? \`
