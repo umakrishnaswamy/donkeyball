@@ -344,10 +344,16 @@ function signupPage(data) {
   const msg = document.getElementById('message');
   const countEl = document.getElementById('playerCount');
 
+  const btn = form.querySelector('button[type="submit"]');
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const name = document.getElementById('nameInput').value.trim();
     if (!name) return;
+    btn.disabled = true;
+    btn.textContent = '⏳ Signing you up...';
+    msg.className = '';
+    msg.textContent = '';
     try {
       const res = await fetch('/api/signup', {
         method: 'POST',
@@ -360,13 +366,18 @@ function signupPage(data) {
         msg.textContent = '🎉 You\'re in! Welcome to the tournament, ' + name + '!';
         form.reset();
         countEl.textContent = data.playerCount + ' player' + (data.playerCount !== 1 ? 's' : '') + ' registered';
+        btn.textContent = '✅ Signed up!';
       } else {
         msg.className = 'message error';
         msg.textContent = '⚠️ ' + (data.error || 'Something went wrong');
+        btn.disabled = false;
+        btn.textContent = '🫏 Join the Tournament';
       }
     } catch(err) {
       msg.className = 'message error';
-      msg.textContent = '⚠️ Could not connect to server';
+      msg.textContent = '⚠️ Could not connect — the server is waking up, please try again in 30 seconds.';
+      btn.disabled = false;
+      btn.textContent = '🫏 Join the Tournament';
     }
   });
 </script>
