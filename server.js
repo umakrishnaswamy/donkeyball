@@ -60,6 +60,38 @@ async function saveData(data) {
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2), 'utf8');
 }
 
+function parseFormBody(req) {
+  return new Promise((resolve) => {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', () => {
+      const params = {};
+      for (const pair of body.split('&')) {
+        const idx = pair.indexOf('=');
+        if (idx === -1) continue;
+        const k = decodeURIComponent(pair.slice(0, idx).replace(/\+/g, ' '));
+        const v = decodeURIComponent(pair.slice(idx + 1).replace(/\+/g, ' '));
+        if (k) params[k] = v;
+      }
+      resolve(params);
+    });
+    req.on('error', () => resolve({}));
+  });
+}
+
+function redirect(res, location) {
+  res.writeHead(302, { Location: location });
+  res.end();
+}
+
+function teamDisplay(team, players) {
+  if (!team) return 'TBD';
+  return team.players.map(pid => {
+    const p = players.find(pl => pl.id === pid);
+    return p ? p.name : '?';
+  }).join(' & ') || team.name || 'TBD';
+}
+
 // ─── Bracket logic ────────────────────────────────────────────────────────────
 
 function nextPow2(n) {
@@ -192,12 +224,26 @@ function pickTeamNames(count) {
 
 // ─── HTML Pages ───────────────────────────────────────────────────────────────
 
-function signupPage(data) {
+function escHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function signupPage(data, status, playerName) {
+  const count = data.players.length;
+  let msgHtml = '';
+  if (status === 'ok') {
+    msgHtml = `<div class="message success">🎉 You're in! Welcome, ${escHtml(playerName)}!</div>`;
+  } else if (status === 'dup') {
+    msgHtml = `<div class="message error">⚠️ That name is already registered!</div>`;
+  } else if (status === 'empty') {
+    msgHtml = `<div class="message error">⚠️ Please enter your name.</div>`;
+  }
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="refresh" content="240">
 <title>Donkeyball Tournament - Sign Up</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -222,18 +268,8 @@ function signupPage(data) {
     box-shadow: 0 25px 60px rgba(0,0,0,0.5);
   }
   .emoji { font-size: 72px; margin-bottom: 16px; display: block; }
-  h1 {
-    color: #fff;
-    font-size: 2rem;
-    font-weight: 900;
-    letter-spacing: -0.5px;
-    margin-bottom: 8px;
-  }
-  .subtitle {
-    color: #a0a0c0;
-    font-size: 1rem;
-    margin-bottom: 32px;
-  }
+  h1 { color: #fff; font-size: 2rem; font-weight: 900; letter-spacing: -0.5px; margin-bottom: 8px; }
+  .subtitle { color: #a0a0c0; font-size: 1rem; margin-bottom: 32px; }
   .player-count {
     display: inline-block;
     background: rgba(255,220,0,0.15);
@@ -246,78 +282,26 @@ function signupPage(data) {
     margin-bottom: 32px;
   }
   .form-group { margin-bottom: 20px; text-align: left; }
-  label {
-    display: block;
-    color: #c0c0e0;
-    font-size: 0.85rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    margin-bottom: 8px;
-  }
+  label { display: block; color: #c0c0e0; font-size: 0.85rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
   input[type="text"] {
-    width: 100%;
-    padding: 14px 18px;
+    width: 100%; padding: 14px 18px;
     background: rgba(255,255,255,0.08);
     border: 2px solid rgba(255,255,255,0.15);
-    border-radius: 12px;
-    color: #fff;
-    font-size: 1.1rem;
-    outline: none;
-    transition: border-color 0.2s;
+    border-radius: 12px; color: #fff; font-size: 1.1rem; outline: none; transition: border-color 0.2s;
   }
   input[type="text"]:focus { border-color: #ffd700; }
   input[type="text"]::placeholder { color: rgba(255,255,255,0.3); }
   .btn {
-    width: 100%;
-    padding: 16px;
+    width: 100%; padding: 16px;
     background: linear-gradient(135deg, #ffd700, #ff8c00);
-    border: none;
-    border-radius: 12px;
-    color: #1a0a2e;
-    font-size: 1.1rem;
-    font-weight: 900;
-    cursor: pointer;
-    transition: transform 0.1s, box-shadow 0.1s;
-    text-transform: uppercase;
-    letter-spacing: 1px;
+    border: none; border-radius: 12px; color: #1a0a2e;
+    font-size: 1.1rem; font-weight: 900; cursor: pointer;
+    text-transform: uppercase; letter-spacing: 1px;
   }
-  .btn:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(255,215,0,0.4); }
-  .btn:active { transform: translateY(0); }
-  .message {
-    margin-top: 20px;
-    padding: 14px 20px;
-    border-radius: 10px;
-    font-weight: 600;
-    font-size: 0.95rem;
-  }
-  .message.success {
-    background: rgba(0,255,100,0.15);
-    border: 1px solid rgba(0,255,100,0.3);
-    color: #00ff64;
-  }
-  .message.error {
-    background: rgba(255,80,80,0.15);
-    border: 1px solid rgba(255,80,80,0.3);
-    color: #ff5050;
-  }
-  .links {
-    margin-top: 32px;
-    display: flex;
-    gap: 12px;
-    justify-content: center;
-    flex-wrap: wrap;
-  }
-  .links a {
-    color: rgba(255,255,255,0.5);
-    text-decoration: none;
-    font-size: 0.85rem;
-    padding: 6px 14px;
-    border: 1px solid rgba(255,255,255,0.15);
-    border-radius: 999px;
-    transition: all 0.2s;
-  }
-  .links a:hover { color: #fff; border-color: rgba(255,255,255,0.4); }
+  .btn:hover { opacity: 0.9; }
+  .message { margin-top: 20px; padding: 14px 20px; border-radius: 10px; font-weight: 600; font-size: 0.95rem; }
+  .message.success { background: rgba(0,255,100,0.15); border: 1px solid rgba(0,255,100,0.3); color: #00ff64; }
+  .message.error { background: rgba(255,80,80,0.15); border: 1px solid rgba(255,80,80,0.3); color: #ff5050; }
 </style>
 </head>
 <body>
@@ -325,62 +309,16 @@ function signupPage(data) {
   <span class="emoji">🫏</span>
   <h1>DONKEYBALL TOURNAMENT</h1>
   <p class="subtitle">Step up. Sign up. Get kicked.</p>
-  <div class="player-count" id="playerCount">${data.players.length} player${data.players.length !== 1 ? 's' : ''} registered</div>
-  <form id="signupForm">
+  <div class="player-count">${count} player${count !== 1 ? 's' : ''} registered</div>
+  <form method="POST" action="/signup">
     <div class="form-group">
       <label for="nameInput">Your Name</label>
-      <input type="text" id="nameInput" placeholder="Enter your name..." maxlength="50" autocomplete="off" required>
+      <input type="text" id="nameInput" name="name" placeholder="Enter your name..." maxlength="50" autocomplete="off" required>
     </div>
     <button type="submit" class="btn">🫏 Join the Tournament</button>
   </form>
-  <div id="message"></div>
-  <div class="links">
-    <a href="/admin">Admin Panel</a>
-    <a href="/tv">TV Display</a>
-  </div>
+  ${msgHtml}
 </div>
-<script>
-  const form = document.getElementById('signupForm');
-  const msg = document.getElementById('message');
-  const countEl = document.getElementById('playerCount');
-
-  const btn = form.querySelector('button[type="submit"]');
-
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const name = document.getElementById('nameInput').value.trim();
-    if (!name) return;
-    btn.disabled = true;
-    btn.textContent = '⏳ Signing you up...';
-    msg.className = '';
-    msg.textContent = '';
-    try {
-      const res = await fetch('/api/signup', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({name})
-      });
-      const data = await res.json();
-      if (res.ok) {
-        msg.className = 'message success';
-        msg.textContent = '🎉 You\'re in! Welcome to the tournament, ' + name + '!';
-        form.reset();
-        countEl.textContent = data.playerCount + ' player' + (data.playerCount !== 1 ? 's' : '') + ' registered';
-        btn.textContent = '✅ Signed up!';
-      } else {
-        msg.className = 'message error';
-        msg.textContent = '⚠️ ' + (data.error || 'Something went wrong');
-        btn.disabled = false;
-        btn.textContent = '🫏 Join the Tournament';
-      }
-    } catch(err) {
-      msg.className = 'message error';
-      msg.textContent = '⚠️ Could not connect — the server is waking up, please try again in 30 seconds.';
-      btn.disabled = false;
-      btn.textContent = '🫏 Join the Tournament';
-    }
-  });
-</script>
 </body>
 </html>`;
 }
@@ -780,12 +718,11 @@ function renderTeams() {
         </li>
       \` : '';
     }).join('');
+    const displayName = team.players.map(pid => { const p = state.players.find(pl => pl.id === pid); return p ? p.name : null; }).filter(Boolean).join(' & ') || team.name;
     return \`
       <div class="team-card">
         <div class="team-header">
-          <input class="team-name-input" type="text" value="\${escHtml(team.name)}"
-            onblur="renameTeam('\${team.id}', this.value)"
-            onkeydown="if(event.key==='Enter') this.blur()">
+          <span style="font-weight:700;font-size:1rem;">\${escHtml(displayName)}</span>
         </div>
         <ul class="team-players">\${players || '<li style="color:#aaa;font-size:0.85rem;padding:6px">No players</li>'}</ul>
       </div>
@@ -793,28 +730,62 @@ function renderTeams() {
   }).join('') + '</div>';
 }
 
+function getPlayerNames(team) {
+  if (!team) return 'TBD';
+  return team.players.map(pid => { const p = state.players.find(pl => pl.id === pid); return p ? p.name : '?'; }).filter(Boolean).join(' & ') || team.name || 'TBD';
+}
 function renderBracket() {
   const c = document.getElementById('bracketContainer');
-  if (!state.bracket || !state.bracket.rounds.length) {
+  if (!state.bracket || (!state.bracket.table1 && !state.bracket.table2)) {
     c.innerHTML = '<div class="empty-state"><div class="big">🏆</div>No bracket yet. Generate teams first, then create the bracket.</div>';
     return;
   }
-  const rounds = state.bracket.rounds;
-  const roundNames = ['Round 1', 'Quarterfinals', 'Semifinals', 'Finals', 'Champion'];
-  // Adjust names based on actual rounds
-  const names = rounds.map((_, i) => {
-    if (i === rounds.length - 1) return 'Finals';
-    if (i === rounds.length - 2 && rounds.length > 2) return 'Semifinals';
-    if (i === rounds.length - 3 && rounds.length > 3) return 'Quarterfinals';
-    return 'Round ' + (i + 1);
-  });
-
-  c.innerHTML = '<div class="bracket-grid">' + rounds.map((round, ri) => \`
-    <div class="bracket-round">
-      <div class="round-label">\${names[ri]}</div>
-      \${round.map(match => renderMatchCard(match, ri === rounds.length - 1)).join('')}
-    </div>
-  \`).join('') + '</div>';
+  const tables = [
+    { key: 'table1', label: 'Table 1' },
+    { key: 'table2', label: 'Table 2' }
+  ].filter(t => state.bracket[t.key] && state.bracket[t.key].rounds.length);
+  c.innerHTML = tables.map(({ key, label }) => {
+    const bracket = state.bracket[key];
+    const rounds = bracket.rounds;
+    const roundNames = rounds.map((_, i) => {
+      if (i === rounds.length - 1) return 'Finals';
+      if (i === rounds.length - 2 && rounds.length > 2) return 'Semifinals';
+      return 'Round ' + (i + 1);
+    });
+    const finalMatch = rounds[rounds.length - 1][0];
+    const champion = finalMatch && finalMatch.winnerId && finalMatch.winnerId !== 'BYE'
+      ? getPlayerNames(state.teams.find(t => t.id === finalMatch.winnerId))
+      : null;
+    return \`<div class="bracket-section">
+      <h3 style="margin-bottom:12px;color:#0f3460;">🏓 \${label}\${champion ? ' — Champion: ' + escHtml(champion) : ''}</h3>
+      <div style="display:flex;gap:16px;overflow-x:auto;">
+        \${rounds.map((round, ri) => \`
+          <div style="min-width:200px;">
+            <div style="font-size:0.75rem;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">\${roundNames[ri]}</div>
+            \${round.map(match => {
+              const t1 = state.teams.find(t => t.id === match.team1Id);
+              const t2 = state.teams.find(t => t.id === match.team2Id);
+              const n1 = match.team1Id === 'BYE' ? 'BYE' : (t1 ? getPlayerNames(t1) : 'TBD');
+              const n2 = match.team2Id === 'BYE' ? 'BYE' : (t2 ? getPlayerNames(t2) : 'TBD');
+              const isBye = match.status === 'bye';
+              const isDone = match.status === 'completed';
+              const canPlay = !isDone && !isBye && match.team1Id && match.team2Id && match.team1Id !== 'BYE' && match.team2Id !== 'BYE';
+              return \`<div style="border:1px solid #e0e0e0;border-radius:8px;padding:10px;margin-bottom:8px;background:\${isDone ? '#f0fff0' : '#fff'}">
+                <div style="font-size:0.8rem;font-weight:\${match.winnerId === match.team1Id ? '700' : '400'};\${match.winnerId === match.team1Id ? 'color:#22c55e' : ''}">\${escHtml(n1)}</div>
+                <div style="font-size:0.7rem;color:#aaa;margin:2px 0;">vs</div>
+                <div style="font-size:0.8rem;font-weight:\${match.winnerId === match.team2Id ? '700' : '400'};\${match.winnerId === match.team2Id ? 'color:#22c55e' : ''}">\${escHtml(n2)}</div>
+                \${canPlay ? \`<div style="margin-top:8px;display:flex;gap:4px;">
+                  <button class="btn btn-sm btn-success" onclick="setWinner('\${match.id}','\${match.team1Id}')">✓ \${escHtml(n1.split(' & ')[0])}</button>
+                  <button class="btn btn-sm btn-success" onclick="setWinner('\${match.id}','\${match.team2Id}')">✓ \${escHtml(n2.split(' & ')[0])}</button>
+                </div>\` : ''}
+                \${isDone ? \`<div style="font-size:0.7rem;color:#22c55e;margin-top:4px;">Winner: \${escHtml(match.winnerId === match.team1Id ? n1 : n2)}</div>\` : ''}
+              </div>\`;
+            }).join('')}
+          </div>
+        \`).join('')}
+      </div>
+    </div>\`;
+  }).join('<hr style="margin:24px 0;">');
 }
 
 function renderMatchCard(match, isFinal) {
@@ -1198,6 +1169,32 @@ function tvPage() {
     letter-spacing: 4px;
     text-transform: uppercase;
   }
+  .dual-bracket {
+    display: flex;
+    gap: 0;
+    height: 100%;
+    width: 100%;
+  }
+  .table-section {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-right: 1px solid rgba(255,255,255,0.08);
+    padding: 8px;
+  }
+  .table-section:last-child { border-right: none; }
+  .table-label {
+    font-size: clamp(0.8rem, 1.5vw, 1.1rem);
+    font-weight: 900;
+    color: #c8ff00;
+    letter-spacing: 3px;
+    text-align: center;
+    margin-bottom: 8px;
+    padding: 4px 0;
+    border-bottom: 1px solid rgba(200,255,0,0.2);
+    flex-shrink: 0;
+  }
 </style>
 </head>
 <body>
@@ -1237,95 +1234,106 @@ async function loadAndRender() {
   }
 }
 
-function getTeamName(id, teams) {
+function getTeamDisplay(id, teams, players) {
   if (!id) return null;
   if (id === 'BYE') return 'BYE';
   const t = teams.find(t => t.id === id);
-  return t ? t.name : '???';
+  if (!t) return '???';
+  return t.players.map(pid => { const p = players.find(pl => pl.id === pid); return p ? p.name : null; }).filter(Boolean).join(' & ') || t.name || '???';
 }
 
 function render(state) {
   const area = document.getElementById('bracketArea');
   const banner = document.getElementById('championBanner');
   const championEl = document.getElementById('championName');
+  const teams = state.teams;
+  const players = state.players;
 
-  if (!state.bracket || !state.bracket.rounds.length) {
+  if (!state.bracket || (!state.bracket.table1 && !state.bracket.table2)) {
     area.innerHTML = '<div class="no-bracket"><div class="big">🫏</div><p>Waiting for bracket...</p></div>';
     banner.classList.remove('show');
     return;
   }
 
-  const rounds = state.bracket.rounds;
-  const teams = state.teams;
-
-  // Find champion
-  const finalMatch = rounds[rounds.length - 1][0];
-  if (finalMatch && finalMatch.winnerId && finalMatch.winnerId !== 'BYE') {
+  // Find overall champions
+  const champions = [];
+  for (const key of ['table1', 'table2']) {
+    const b = state.bracket[key];
+    if (!b || !b.rounds.length) continue;
+    const fm = b.rounds[b.rounds.length - 1][0];
+    if (fm && fm.winnerId && fm.winnerId !== 'BYE') {
+      champions.push(getTeamDisplay(fm.winnerId, teams, players));
+    }
+  }
+  if (champions.length > 0) {
     banner.classList.add('show');
-    championEl.textContent = '🏆 ' + getTeamName(finalMatch.winnerId, teams) + ' 🏆';
+    championEl.textContent = '🏆 ' + champions.join(' & ') + ' 🏆';
   } else {
     banner.classList.remove('show');
   }
 
-  const roundLabels = rounds.map((_, i) => {
-    if (i === rounds.length - 1) return 'FINALS';
-    if (i === rounds.length - 2 && rounds.length > 2) return 'SEMIFINALS';
-    if (i === rounds.length - 3 && rounds.length > 3) return 'QUARTERFINALS';
-    return 'ROUND ' + (i + 1);
-  });
+  function renderTable(bracket, tableLabel) {
+    if (!bracket) return '';
+    const rounds = bracket.rounds;
+    const roundLabels = rounds.map((_, i) => {
+      if (i === rounds.length - 1) return 'FINALS';
+      if (i === rounds.length - 2 && rounds.length > 2) return 'SEMIS';
+      return 'ROUND ' + (i + 1);
+    });
+    return '<div class="table-section">' +
+      '<div class="table-label">' + tableLabel + '</div>' +
+      rounds.map((round, ri) => {
+        const matchesHtml = round.map(match => {
+          const t1 = getTeamDisplay(match.team1Id, teams, players);
+          const t2 = getTeamDisplay(match.team2Id, teams, players);
+          const isBye = match.status === 'bye';
+          const isCompleted = match.status === 'completed';
+          const isActive = !match.winnerId && !isBye && match.team1Id && match.team2Id && match.team1Id !== 'BYE' && match.team2Id !== 'BYE';
 
-  area.innerHTML = rounds.map((round, ri) => {
-    const matchesHtml = round.map(match => {
-      const t1 = getTeamName(match.team1Id, teams);
-      const t2 = getTeamName(match.team2Id, teams);
-      const isBye = match.status === 'bye';
-      const isCompleted = match.status === 'completed';
-      const hasWinner = !!match.winnerId;
-      // Active = both teams present, not completed, not bye
-      const isActive = !hasWinner && !isBye && t1 && t2 && t1 !== 'BYE' && t2 !== 'BYE' && match.team1Id && match.team2Id;
+          let boxClass = 'match-box';
+          if (isBye) boxClass += ' bye';
+          else if (isCompleted || match.winnerId) boxClass += ' completed';
+          else if (isActive) boxClass += ' active';
 
-      let boxClass = 'match-box';
-      if (isBye) boxClass += ' bye';
-      else if (isCompleted || hasWinner) boxClass += ' completed';
-      else if (isActive) boxClass += ' active';
+          let statusClass, statusText;
+          if (isBye) { statusClass = 'status-bye'; statusText = 'BYE'; }
+          else if (match.winnerId) { statusClass = 'status-completed'; statusText = 'FINAL'; }
+          else if (isActive) { statusClass = 'status-active'; statusText = 'UP NEXT'; }
+          else { statusClass = 'status-pending'; statusText = 'PENDING'; }
 
-      let statusClass, statusText;
-      if (isBye) { statusClass = 'status-bye'; statusText = 'BYE'; }
-      else if (hasWinner) { statusClass = 'status-completed'; statusText = 'FINAL'; }
-      else if (isActive) { statusClass = 'status-active'; statusText = 'UP NEXT'; }
-      else { statusClass = 'status-pending'; statusText = 'PENDING'; }
+          function teamRowHtml(teamId, teamName) {
+            if (!teamId || !teamName) {
+              return '<div class="team-row tbd"><span class="team-name">TBD</span></div>';
+            }
+            if (teamId === 'BYE') return '<div class="team-row bye-team"><span class="team-name">BYE</span></div>';
+            const isWinner = match.winnerId === teamId;
+            const isLoser = match.winnerId && match.winnerId !== teamId && match.winnerId !== 'BYE';
+            let cls = 'team-row';
+            if (isWinner) cls += ' winner';
+            else if (isLoser) cls += ' loser';
+            return '<div class="' + cls + '">' +
+              (isWinner ? '<span class="trophy">🏆</span>' : '') +
+              '<span class="team-name">' + teamName + '</span>' +
+              '</div>';
+          }
 
-      function teamRowHtml(teamId, teamName) {
-        if (!teamId || !teamName) {
-          return '<div class="team-row tbd"><span class="team-name">TBD</span></div>';
-        }
-        if (teamName === 'BYE') {
-          return '<div class="team-row bye-team"><span class="team-name">— BYE —</span></div>';
-        }
-        let cls = 'team-row';
-        let trophy = '';
-        if (hasWinner) {
-          if (match.winnerId === teamId) { cls += ' winner'; trophy = '<span class="trophy">🏆</span>'; }
-          else { cls += ' loser'; }
-        }
-        return '<div class="' + cls + '">' + trophy + '<span class="team-name">' + escHtml(teamName) + '</span></div>';
-      }
-
-      return '<div class="match-wrap">' +
-        '<div class="' + boxClass + '">' +
-          '<span class="match-status-badge ' + statusClass + '">' + statusText + '</span>' +
-          teamRowHtml(match.team1Id, t1) +
-          '<div class="vs-divider">VS</div>' +
-          teamRowHtml(match.team2Id, t2) +
-        '</div>' +
+          return '<div class="' + boxClass + '">' +
+            '<span class="match-status-badge ' + statusClass + '">' + statusText + '</span>' +
+            teamRowHtml(match.team1Id, t1) +
+            '<div class="vs-divider">VS</div>' +
+            teamRowHtml(match.team2Id, t2) +
+            '<div class="connector"></div>' +
+            '</div>';
+        }).join('');
+        return '<div class="round-col"><div class="round-label">' + roundLabels[ri] + '</div>' + matchesHtml + '</div>';
+      }).join('') +
       '</div>';
-    }).join('');
+  }
 
-    return '<div class="round-col">' +
-      '<div class="round-label">' + roundLabels[ri] + '</div>' +
-      '<div class="matches-col">' + matchesHtml + '</div>' +
+  area.innerHTML = '<div class="dual-bracket">' +
+    renderTable(state.bracket.table1, '🏓 TABLE 1') +
+    (state.bracket.table2 ? renderTable(state.bracket.table2, '🏓 TABLE 2') : '') +
     '</div>';
-  }).join('');
 }
 
 function escHtml(str) {
@@ -1393,13 +1401,30 @@ async function router(req, res) {
   // ── HTML pages ──
   if (pathname === '/' || pathname === '/signup') {
     const data = await loadData();
-    return sendHTML(res, signupPage(data));
+    const q = parsed.query;
+    return sendHTML(res, signupPage(data, q.status, q.name));
   }
   if (pathname === '/admin') {
     return sendHTML(res, adminPage());
   }
   if (pathname === '/tv' || pathname === '/bracket') {
     return sendHTML(res, tvPage());
+  }
+
+  // POST /signup (server-side form submission)
+  if (method === 'POST' && pathname === '/signup') {
+    const body = await parseFormBody(req);
+    const name = (body.name || '').trim();
+    if (!name) return redirect(res, '/signup?status=empty');
+    if (name.length > 50) return redirect(res, '/signup?status=empty');
+    const data = await loadData();
+    const dup = data.players.find(p => p.name.toLowerCase() === name.toLowerCase());
+    if (dup) return redirect(res, '/signup?status=dup');
+    const player = { id: uuid(), name, createdAt: new Date().toISOString() };
+    data.players.push(player);
+    await saveData(data);
+    console.log(`  -> Player signed up: ${name}`);
+    return redirect(res, '/signup?status=ok&name=' + encodeURIComponent(name));
   }
 
   // ── API ──
@@ -1523,10 +1548,17 @@ async function router(req, res) {
   if (method === 'POST' && pathname === '/api/bracket/generate') {
     const data = await loadData();
     if (data.teams.length < 2) return sendJSON(res, 400, { error: 'Need at least 2 teams' });
-    const bracket = generateBracket(data.teams);
+    const shuffled = shuffle([...data.teams]);
+    const mid = Math.ceil(shuffled.length / 2);
+    const table1Teams = shuffled.slice(0, mid);
+    const table2Teams = shuffled.slice(mid);
+    const bracket = {
+      table1: generateBracket(table1Teams),
+      table2: table2Teams.length >= 2 ? generateBracket(table2Teams) : null
+    };
     data.bracket = bracket;
     await saveData(data);
-    console.log(`  -> Generated bracket with ${data.teams.length} teams`);
+    console.log(`  -> Generated dual bracket: Table 1 (${table1Teams.length} teams), Table 2 (${table2Teams.length} teams)`);
     return sendJSON(res, 200, { bracket });
   }
 
@@ -1541,26 +1573,31 @@ async function router(req, res) {
     if (!data.bracket) return sendJSON(res, 404, { error: 'No bracket' });
 
     let found = false;
-    for (const round of data.bracket.rounds) {
-      for (const match of round) {
-        if (match.id === matchId) {
-          // Validate winner is one of the teams
-          if (winnerId !== match.team1Id && winnerId !== match.team2Id) {
-            return sendJSON(res, 400, { error: 'Invalid winner' });
+    let foundTable = null;
+    for (const tableKey of ['table1', 'table2']) {
+      const tableBracket = data.bracket[tableKey];
+      if (!tableBracket) continue;
+      for (const round of tableBracket.rounds) {
+        for (const match of round) {
+          if (match.id === matchId) {
+            if (winnerId !== match.team1Id && winnerId !== match.team2Id) {
+              return sendJSON(res, 400, { error: 'Invalid winner' });
+            }
+            match.winnerId = winnerId;
+            match.status = 'completed';
+            found = true;
+            foundTable = tableKey;
+            break;
           }
-          match.winnerId = winnerId;
-          match.status = 'completed';
-          found = true;
-          break;
         }
+        if (found) break;
       }
       if (found) break;
     }
 
     if (!found) return sendJSON(res, 404, { error: 'Match not found' });
 
-    // Propagate winners through bracket
-    propagateBracket(data.bracket);
+    propagateBracket(data.bracket[foundTable]);
     await saveData(data);
     console.log(`  -> Match ${matchId} winner set: ${winnerId}`);
     return sendJSON(res, 200, { bracket: data.bracket });
