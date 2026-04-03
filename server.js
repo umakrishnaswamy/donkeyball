@@ -1399,7 +1399,7 @@ async function router(req, res) {
   console.log(`[${new Date().toISOString()}] ${method} ${pathname}`);
 
   // ── HTML pages ──
-  if (pathname === '/' || pathname === '/signup') {
+  if (method === 'GET' && (pathname === '/' || pathname === '/signup')) {
     const data = await loadData();
     const q = parsed.query;
     return sendHTML(res, signupPage(data, q.status, q.name));
