@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: donkeyball
+    runtime: docker
+    plan: free
+    envVars:
+      - key: PORT
+        value: 8080
+      - key: DATA_FILE
+        value: /data/data.json
