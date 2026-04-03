@@ -1555,6 +1555,37 @@ async function router(req, res) {
     return sendJSON(res, 200, { bracket: data.bracket });
   }
 
+  // GET /api/debug
+  if (method === 'GET' && pathname === '/api/debug') {
+    const upstashConfigured = !!(UPSTASH_URL && UPSTASH_TOKEN);
+    let upstashOk = false;
+    let upstashError = null;
+    let data = null;
+    if (upstashConfigured) {
+      try {
+        const r = await fetch(UPSTASH_URL, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${UPSTASH_TOKEN}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(['PING'])
+        });
+        const j = await r.json();
+        upstashOk = j.result === 'PONG';
+        if (!upstashOk) upstashError = JSON.stringify(j);
+      } catch (e) {
+        upstashError = e.message;
+      }
+    }
+    if (upstashOk) data = await loadData();
+    return sendJSON(res, 200, {
+      upstashConfigured,
+      upstashOk,
+      upstashError,
+      urlPrefix: UPSTASH_URL ? UPSTASH_URL.slice(0, 30) + '...' : null,
+      playerCount: data ? data.players.length : null,
+      useUpstash: USE_UPSTASH
+    });
+  }
+
   // 404
   sendJSON(res, 404, { error: 'Not found' });
 }
