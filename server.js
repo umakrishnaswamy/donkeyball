@@ -1181,8 +1181,17 @@ function tvPage() {
     overflow: hidden;
     border-right: 1px solid rgba(255,255,255,0.08);
     padding: 8px;
+    min-width: 0;
   }
   .table-section:last-child { border-right: none; }
+  .rounds-row {
+    display: flex;
+    flex: 1;
+    gap: 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    min-height: 0;
+  }
   .table-label {
     font-size: clamp(0.8rem, 1.5vw, 1.1rem);
     font-weight: 900;
@@ -1281,6 +1290,7 @@ function render(state) {
     });
     return '<div class="table-section">' +
       '<div class="table-label">' + tableLabel + '</div>' +
+      '<div class="rounds-row">' +
       rounds.map((round, ri) => {
         const matchesHtml = round.map(match => {
           const t1 = getTeamDisplay(match.team1Id, teams, players);
@@ -1326,6 +1336,7 @@ function render(state) {
         }).join('');
         return '<div class="round-col"><div class="round-label">' + roundLabels[ri] + '</div>' + matchesHtml + '</div>';
       }).join('') +
+      '</div>' +
       '</div>';
   }
 
