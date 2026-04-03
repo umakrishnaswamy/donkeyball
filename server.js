@@ -308,7 +308,6 @@ function signupPage(data, status, playerName) {
 <div class="container">
   <span class="emoji">🫏</span>
   <h1>DONKEYBALL TOURNAMENT</h1>
-  <p class="subtitle">Step up. Sign up. Get kicked.</p>
   <div class="player-count">${count} player${count !== 1 ? 's' : ''} registered</div>
   <form method="POST" action="/signup">
     <div class="form-group">
