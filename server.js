@@ -1548,7 +1548,8 @@ async function router(req, res) {
     const data = await loadData();
     if (data.teams.length < 2) return sendJSON(res, 400, { error: 'Need at least 2 teams' });
     const shuffled = shuffle([...data.teams]);
-    const mid = Math.ceil(shuffled.length / 2);
+    // Only split into two tables if there are enough teams for both (>=4 total)
+    const mid = shuffled.length >= 4 ? Math.ceil(shuffled.length / 2) : shuffled.length;
     const table1Teams = shuffled.slice(0, mid);
     const table2Teams = shuffled.slice(mid);
     const bracket = {
