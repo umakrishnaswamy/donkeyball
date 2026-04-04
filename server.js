@@ -958,7 +958,7 @@ function tvPage() {
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body {
     width: 100%; height: 100%;
-    background: #000;
+    background: #0b0c2a;
     color: #fff;
     font-family: 'Segoe UI', 'Arial Black', system-ui, sans-serif;
     overflow: hidden;
@@ -967,12 +967,14 @@ function tvPage() {
     display: flex;
     flex-direction: column;
     height: 100vh;
+    background: radial-gradient(ellipse at top, #1a1040 0%, #0b0c2a 60%);
   }
   header {
     text-align: center;
     padding: 14px 20px 10px;
-    background: linear-gradient(180deg, #0a0a0a 0%, #000 100%);
-    border-bottom: 3px solid #c8ff00;
+    background: linear-gradient(180deg, #13102e 0%, #0e0b25 100%);
+    border-bottom: 3px solid transparent;
+    border-image: linear-gradient(90deg, #f97316, #ec4899, #f97316) 1;
     flex-shrink: 0;
   }
   header h1 {
@@ -980,12 +982,15 @@ function tvPage() {
     font-weight: 900;
     letter-spacing: 3px;
     text-transform: uppercase;
-    color: #c8ff00;
-    text-shadow: 0 0 30px rgba(200,255,0,0.6), 0 0 60px rgba(200,255,0,0.3);
+    background: linear-gradient(90deg, #fb923c, #f472b6, #fb923c);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    filter: drop-shadow(0 0 20px rgba(249,115,22,0.5));
   }
   .subtitle {
     font-size: clamp(0.7rem, 1.5vw, 1rem);
-    color: rgba(200,255,0,0.6);
+    color: rgba(251,146,60,0.6);
     letter-spacing: 4px;
     text-transform: uppercase;
     margin-top: 4px;
@@ -1024,9 +1029,9 @@ function tvPage() {
     font-weight: 900;
     letter-spacing: 3px;
     text-transform: uppercase;
-    color: rgba(200,255,0,0.7);
+    color: rgba(251,146,60,0.8);
     padding: 6px 0 10px;
-    border-bottom: 1px solid rgba(200,255,0,0.2);
+    border-bottom: 1px solid rgba(251,146,60,0.2);
     margin: 0 8px 8px;
     flex-shrink: 0;
   }
@@ -1046,31 +1051,32 @@ function tvPage() {
     position: relative;
   }
   .match-box {
-    background: #0d0d0d;
-    border: 2px solid rgba(255,255,255,0.12);
-    border-radius: 10px;
+    background: rgba(255,255,255,0.04);
+    border: 2px solid rgba(255,255,255,0.1);
+    border-radius: 12px;
     padding: 10px 12px;
     width: 100%;
     transition: border-color 0.3s, box-shadow 0.3s;
     position: relative;
+    backdrop-filter: blur(4px);
   }
   .match-box.active {
-    border-color: #c8ff00;
-    box-shadow: 0 0 20px rgba(200,255,0,0.25), inset 0 0 20px rgba(200,255,0,0.04);
+    border-color: #f97316;
+    box-shadow: 0 0 24px rgba(249,115,22,0.35), inset 0 0 20px rgba(249,115,22,0.05);
   }
   .match-box.completed {
-    border-color: rgba(200,255,0,0.35);
+    border-color: rgba(52,211,153,0.4);
   }
   .match-box.bye {
-    border-color: rgba(255,255,255,0.06);
-    opacity: 0.5;
+    border-color: rgba(255,255,255,0.05);
+    opacity: 0.4;
   }
   .team-row {
     display: flex;
     align-items: center;
     gap: 8px;
     padding: 7px 8px;
-    border-radius: 6px;
+    border-radius: 8px;
     transition: all 0.3s;
     min-height: 36px;
   }
@@ -1085,19 +1091,19 @@ function tvPage() {
   }
   .team-row .trophy { font-size: 1rem; }
   .team-row.winner {
-    background: rgba(200,255,0,0.15);
-    color: #c8ff00;
+    background: rgba(52,211,153,0.15);
+    color: #34d399;
   }
   .team-row.loser {
-    opacity: 0.35;
-    color: #888;
+    opacity: 0.3;
+    color: #666;
   }
-  .team-row.tbd { color: rgba(255,255,255,0.25); font-style: italic; }
-  .team-row.bye-team { color: rgba(255,255,255,0.2); font-style: italic; font-size: 0.8rem; }
+  .team-row.tbd { color: rgba(255,255,255,0.2); font-style: italic; }
+  .team-row.bye-team { color: rgba(255,255,255,0.15); font-style: italic; font-size: 0.8rem; }
   .vs-divider {
     text-align: center;
-    font-size: 0.65rem;
-    color: rgba(255,255,255,0.2);
+    font-size: 0.6rem;
+    color: rgba(255,255,255,0.15);
     font-weight: 900;
     letter-spacing: 2px;
     margin: 2px 0;
@@ -1113,33 +1119,33 @@ function tvPage() {
     padding: 2px 8px;
     border-radius: 999px;
   }
-  .status-pending { background: rgba(255,255,255,0.12); color: #888; }
-  .status-active { background: #c8ff00; color: #000; }
-  .status-completed { background: rgba(200,255,0,0.25); color: #c8ff00; }
-  .status-bye { background: rgba(255,255,255,0.07); color: #555; }
+  .status-pending { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.4); }
+  .status-active { background: linear-gradient(90deg, #f97316, #ec4899); color: #fff; }
+  .status-completed { background: rgba(52,211,153,0.2); color: #34d399; }
+  .status-bye { background: rgba(255,255,255,0.05); color: #444; }
   .connector {
     position: absolute;
     right: -8px;
     top: 50%;
     width: 8px;
     height: 2px;
-    background: rgba(200,255,0,0.3);
+    background: rgba(249,115,22,0.3);
     transform: translateY(-50%);
   }
   footer {
     text-align: center;
     padding: 8px;
     font-size: 0.7rem;
-    color: rgba(255,255,255,0.2);
+    color: rgba(255,255,255,0.15);
     letter-spacing: 2px;
     flex-shrink: 0;
-    border-top: 1px solid rgba(255,255,255,0.06);
+    border-top: 1px solid rgba(255,255,255,0.05);
   }
   #refreshDot {
     display: inline-block;
     width: 6px; height: 6px;
     border-radius: 50%;
-    background: #c8ff00;
+    background: #f97316;
     margin-right: 6px;
     vertical-align: middle;
     animation: pulse 2s infinite;
@@ -1150,9 +1156,9 @@ function tvPage() {
   }
   .champion-banner {
     text-align: center;
-    padding: 8px 20px;
-    background: linear-gradient(135deg, rgba(200,255,0,0.1), rgba(200,255,0,0.05));
-    border-bottom: 1px solid rgba(200,255,0,0.2);
+    padding: 10px 20px;
+    background: linear-gradient(135deg, rgba(249,115,22,0.15), rgba(236,72,153,0.1));
+    border-bottom: 1px solid rgba(249,115,22,0.25);
     flex-shrink: 0;
     display: none;
   }
@@ -1160,13 +1166,16 @@ function tvPage() {
   .champion-name {
     font-size: clamp(1.2rem, 3vw, 2rem);
     font-weight: 900;
-    color: #c8ff00;
+    background: linear-gradient(90deg, #fb923c, #f472b6);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
     letter-spacing: 2px;
-    text-shadow: 0 0 20px rgba(200,255,0,0.5);
+    filter: drop-shadow(0 0 12px rgba(249,115,22,0.5));
   }
   .champion-label {
     font-size: 0.75rem;
-    color: rgba(200,255,0,0.5);
+    color: rgba(251,146,60,0.6);
     letter-spacing: 4px;
     text-transform: uppercase;
   }
@@ -1181,7 +1190,7 @@ function tvPage() {
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    border-right: 1px solid rgba(255,255,255,0.08);
+    border-right: 1px solid rgba(255,255,255,0.06);
     padding: 8px;
     min-width: 0;
   }
@@ -1197,12 +1206,12 @@ function tvPage() {
   .table-label {
     font-size: clamp(0.8rem, 1.5vw, 1.1rem);
     font-weight: 900;
-    color: #c8ff00;
+    color: #fb923c;
     letter-spacing: 3px;
     text-align: center;
     margin-bottom: 8px;
     padding: 4px 0;
-    border-bottom: 1px solid rgba(200,255,0,0.2);
+    border-bottom: 1px solid rgba(249,115,22,0.25);
     flex-shrink: 0;
   }
 </style>
