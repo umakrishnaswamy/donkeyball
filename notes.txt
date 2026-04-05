@@ -1,0 +1,2 @@
+- have the admin panel have draggable components in case we need to change folks on teams
+- tv display color scheme needs to be better 
